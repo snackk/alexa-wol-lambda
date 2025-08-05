@@ -1,0 +1,28 @@
+{
+  "manifest": {
+    "apis": {
+      "custom": {
+        "endpoint": {
+          "uri": "PLACEHOLDER_LAMBDA_ARN"
+        }
+      }
+    },
+    "manifestVersion": "1.0",
+    "publishingInformation": {
+      "locales": {
+        "en-US": {
+          "name": "Wake Computer",
+          "summary": "Wake up your computer using voice commands",
+          "description": "Use Alexa to remotely wake up your computer or server using Wake-on-LAN technology."
+        }
+      }
+    },
+    "privacyAndCompliance": {
+      "allowsPurchases": false,
+      "usesPersonalInfo": false,
+      "isChildDirected": false,
+      "isExportCompliant": true,
+      "containsAds": false
+    }
+  }
+}
