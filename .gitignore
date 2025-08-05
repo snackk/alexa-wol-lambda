@@ -1,4 +1,9 @@
 ##########
+# ask-cli
+##########
+ask-resources.json
+.ask/
+##########
 # Terraform
 ##########
 # Local provider/plugins cache

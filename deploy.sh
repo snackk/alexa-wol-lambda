@@ -2,7 +2,7 @@
 set -euo pipefail   # exit on first error, undefined var, or pipeline error
 
 echo "🔧  Building Lambda package ..."
-mvn -q clean package                                 # ➊
+mvn -q clean package
 
 echo "🏗️  ️Deploying AWS resources with Terraform ..."
 pushd terraform >/dev/null
@@ -18,6 +18,6 @@ jq --arg arn "$LAMBDA_ARN" \
 mv skill-package/skill.tmp skill-package/skill.json
 
 echo "🚀  Deploying Alexa skill ..."
-ask deploy --force                                   # ➋
+ask deploy
 
 echo "✅  Deployment complete!"

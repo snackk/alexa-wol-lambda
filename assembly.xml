@@ -7,11 +7,18 @@
     <format>zip</format>
   </formats>
   <includeBaseDirectory>false</includeBaseDirectory>
-  <files>
-    <file>
+  <fileSets>
+    <fileSet>
+      <directory>src</directory>
       <outputDirectory>/</outputDirectory>
-      <source>src/lambda_function.py</source>
-    </file>
-  </files>
-  <!-- use this section if you want to package dependencies -->
+      <includes>
+        <include>**/*</include>
+      </includes>
+      <excludes>
+        <exclude>requirements.txt</exclude>
+        <exclude>**/*.pyc</exclude>
+        <exclude>**/__pycache__/**</exclude>
+      </excludes>
+    </fileSet>
+  </fileSets>
 </assembly>
