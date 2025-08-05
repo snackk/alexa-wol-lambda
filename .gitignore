@@ -1,7 +1,6 @@
 ##########
 # ask-cli
 ##########
-ask-resources.json
 .ask/
 ##########
 # Terraform
