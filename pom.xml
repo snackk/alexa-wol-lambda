@@ -34,14 +34,6 @@
               <includes>
                 <include>**/*.pyc</include>
                 <include>**/__pycache__/**</include>
-                <include>**/*.egg-info/**</include>
-                <include>**/*.dist-info/**</include>
-                <include>**/bin/**</include>
-                <include>**/certifi/**</include>
-                <include>**/charset_normalizer/**</include>
-                <include>**/idna/**</include>
-                <include>**/requests/**</include>
-                <include>**/urllib3/**</include>
               </includes>
             </fileset>
           </filesets>
