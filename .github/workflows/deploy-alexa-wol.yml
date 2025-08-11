@@ -1,0 +1,201 @@
+name: Deploy Alexa wol skill
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # Manual trigger
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'prod'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      force_deploy:
+        description: 'Force deployment'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  AWS_REGION: us-east-1
+  TERRAFORM_VERSION: 1.6.0
+  MAVEN_OPTS: '-Xmx1024m'
+
+jobs:
+  deploy:
+    name: Deploy Alexa wol skill
+    runs-on: ubuntu-latest
+
+    # Only run on main branch pushes or manual triggers
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: 🔄 Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: 📋 Build Information
+        run: |
+          echo "🏗️ Build Information:"
+          echo "- Repository: ${{ github.repository }}"
+          echo "- Branch: ${{ github.ref_name }}"
+          echo "- Commit: ${{ github.sha }}"
+          echo "- Environment: ${{ github.event.inputs.environment || 'dev' }}"
+          echo "- Force Deploy: ${{ github.event.inputs.force_deploy || 'false' }}"
+
+      - name: ☕ Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: 🔧 Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: 🔍 Validate Environment Variables
+        run: |
+          echo "🔍 Validating required environment variables..."
+          
+          # Check if all required secrets are set
+          if [ -z "${{ secrets.ALEXA_SKILL_ID }}" ]; then
+            echo "❌ Error: ALEXA_SKILL_ID secret is not set"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.WOL_USERNAME }}" ]; then
+            echo "❌ Error: WOL_USERNAME secret is not set"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.WOL_PASSWORD }}" ]; then
+            echo "❌ Error: WOL_PASSWORD secret is not set"
+            exit 1
+          fi
+          
+          echo "✅ All required environment variables are set"
+
+      - name: 🔧 Build Lambda Package with Maven
+        run: |
+          echo "🔧 Building Lambda package with Maven..."
+          mvn -q clean package -DskipTests
+          
+          # Validate build output
+          if [ ! -f "target/wake-on-lan-lambda.zip" ]; then
+            echo "❌ Error: Lambda ZIP file not found: target/wake-on-lan-lambda.zip"
+            echo "Maven build may have failed"
+            exit 1
+          fi
+          
+          file_size=$(du -h target/wake-on-lan-lambda.zip | cut -f1)
+          echo "✅ Lambda package created successfully ($file_size)"
+
+      - name: 📦 Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false  # Allows capturing terraform output
+
+      - name: 🏗️ Terraform Init
+        working-directory: terraform
+        run: |
+          echo "📦 Initializing Terraform..."
+          terraform init -upgrade -input=false
+
+      - name: 📋 Terraform Plan
+        working-directory: terraform
+        run: |
+          echo "📋 Planning Terraform deployment..."
+          terraform plan -input=false -out=tfplan \
+            -var="alexa_skill_id=${{ secrets.ALEXA_SKILL_ID }}" \
+            -var="wol_username=${{ secrets.WOL_USERNAME }}" \
+            -var="wol_password=${{ secrets.WOL_PASSWORD }}"
+
+      - name: 🚀 Terraform Apply
+        working-directory: terraform
+        run: |
+          echo "🚀 Applying Terraform changes..."
+          terraform apply -auto-approve -input=false tfplan
+          
+          # Get Lambda ARN for output
+          if terraform output lambda_arn >/dev/null 2>&1; then
+            LAMBDA_ARN=$(terraform output -raw lambda_arn)
+            echo "LAMBDA_ARN=$LAMBDA_ARN" >> $GITHUB_ENV
+            echo "📋 Lambda ARN: $LAMBDA_ARN"
+          else
+            echo "⚠️ Warning: Could not retrieve Lambda ARN"
+          fi
+
+      - name: ✅ Deployment Summary
+        run: |
+          echo "✅ Deployment Complete!"
+          echo ""
+          echo "📊 Summary:"
+          echo "- Environment: ${{ github.event.inputs.environment || 'dev' }}"
+          echo "- Lambda ARN: ${{ env.LAMBDA_ARN || 'Not available' }}"
+          echo "- Build Number: ${{ github.run_number }}"
+          echo "- Git Commit: ${{ github.sha }}"
+          echo ""
+          echo "🔗 Next Steps:"
+          echo "1. Copy the Lambda ARN above"
+          echo "2. Update your Alexa skill endpoint in the Developer Console"
+          echo "3. Test your skill: 'Alexa, discover my devices'"
+
+      - name: 📎 Archive Terraform Plan
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: terraform-plan
+          path: terraform/tfplan
+          retention-days: 30
+
+  # Optional: Separate job for PR validation (doesn't deploy)
+  validate:
+    name: Validate on PR
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: 🔄 Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: ☕ Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: 🔧 Build and Test
+        run: |
+          echo "🔧 Building and testing..."
+          mvn clean package
+
+      - name: 📦 Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: ✅ Terraform Validate
+        working-directory: terraform
+        run: |
+          terraform init -backend=false
+          terraform validate
