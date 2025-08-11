@@ -1,5 +1,5 @@
 provider "aws" {
-  region  = "eu-west-1"
+  region  = "us-east-1"
   profile = "snackk"
 }
 
@@ -69,10 +69,11 @@ resource "aws_lambda_function" "alexa_wake" {
 }
 
 resource "aws_lambda_permission" "alexa_invoke" {
-  statement_id  = "AllowExecutionFromAlexa"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.alexa_wake.function_name
-  principal     = "alexa-appkit.amazon.com"
+  statement_id         = "AllowExecutionFromAlexa"
+  action               = "lambda:InvokeFunction"
+  function_name        = aws_lambda_function.alexa_wake.function_name
+  principal            = "alexa-connectedhome.amazon.com"
+  event_source_token   = var.alexa_skill_id
 }
 
 output "lambda_arn" {

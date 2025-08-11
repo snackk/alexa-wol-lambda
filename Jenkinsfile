@@ -77,18 +77,6 @@ pipeline {
                     }
                 }
 
-                stage('Install ASK CLI') {
-                    steps {
-                        script {
-                            echo "📦 Installing ASK CLI..."
-                            sh """
-                                npm list -g ask-cli || npm install -g ask-cli
-                                ask --version
-                            """
-                        }
-                    }
-                }
-
                 stage('Install JQ') {
                     steps {
                         script {
@@ -177,105 +165,6 @@ pipeline {
 
                         echo "✅ Lambda deployed with ARN: ${env.LAMBDA_ARN}"
                     }
-                }
-            }
-        }
-
-        stage('Update Skill Manifest') {
-            when {
-                anyOf {
-                    expression { params.FORCE_DEPLOY }
-                    expression { params.DEPLOYMENT_ENV == 'dev' }
-                    branch 'main'
-                }
-            }
-
-            steps {
-                script {
-                    echo "🔗 Updating skill manifest with Lambda ARN..."
-
-                    sh """
-                        # Backup original file
-                        cp ${SKILL_MANIFEST_PATH} ${SKILL_MANIFEST_PATH}.backup
-
-                        # Update with Lambda ARN
-                        jq --arg arn "${env.LAMBDA_ARN}" \
-                           '.manifest.apis.custom.endpoint.uri = \$arn' \
-                           ${SKILL_MANIFEST_PATH} > skill-package/skill.tmp
-
-                        mv skill-package/skill.tmp ${SKILL_MANIFEST_PATH}
-
-                        echo "✅ Updated skill manifest:"
-                        jq '.manifest.apis.custom.endpoint.uri' ${SKILL_MANIFEST_PATH}
-                    """
-                }
-            }
-
-            post {
-                always {
-                    archiveArtifacts artifacts: "${SKILL_MANIFEST_PATH}", fingerprint: true
-                }
-            }
-        }
-
-        stage('Deploy Alexa Skill') {
-            when {
-                anyOf {
-                    expression { params.FORCE_DEPLOY }
-                    expression { params.DEPLOYMENT_ENV == 'dev' }
-                    branch 'main'
-                }
-            }
-
-            steps {
-                script {
-                    echo "🚀 Deploying Alexa skill..."
-
-                    withCredentials([
-                        file(credentialsId: 'ask-cli-config', variable: 'ASK_CONFIG_FILE')
-                    ]) {
-                        sh """
-                            # Setup ASK CLI configuration
-                            mkdir -p ~/.ask
-                            cp \$ASK_CONFIG_FILE ~/.ask/cli_config
-
-                            # Deploy the skill
-                            ask deploy --force
-
-                            echo "✅ Alexa skill deployed successfully!"
-                        """
-                    }
-                }
-            }
-        }
-
-        stage('Smoke Tests') {
-            when {
-                anyOf {
-                    expression { params.FORCE_DEPLOY }
-                    expression { params.DEPLOYMENT_ENV == 'dev' }
-                    branch 'main'
-                }
-            }
-
-            steps {
-                script {
-                    echo "🧪 Running smoke tests..."
-
-                    sh """
-                        # Test Lambda function
-                        aws lambda invoke \
-                            --function-name alexa-wake-on-lan \
-                            --payload '{}' \
-                            --profile ${AWS_PROFILE} \
-                            response.json
-
-                        echo "Lambda response:"
-                        cat response.json
-                        rm -f response.json
-
-                        echo "✅ Smoke tests passed!"
-                    """
                 }
             }
         }

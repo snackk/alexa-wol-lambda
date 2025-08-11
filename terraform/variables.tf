@@ -9,3 +9,8 @@ variable "wol_password" {
   type        = string
   sensitive   = true
 }
+
+variable "alexa_skill_id" {
+  description = "Alexa Smart Home Skill ID"
+  type        = string
+}
