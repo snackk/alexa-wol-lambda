@@ -30,8 +30,8 @@ def handle_discovery(directive):
     device = {
         "endpointId": "snackk-alexa-wol",
         "manufacturerName": "Diogo Santos",
-        "description": "Wake on Lan",
-        "friendlyName": "Wake on Lan",
+        "description": "snackk-media",
+        "friendlyName": "snackk-media",
         "displayCategories": ["SWITCH"],
         "additionalAttributes": {
             "manufacturer": "Diogo Santos",
