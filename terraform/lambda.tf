@@ -1,6 +1,5 @@
 provider "aws" {
   region  = "us-east-1"
-  profile = "snackk"
 }
 
 resource "aws_iam_role" "lambda_role" {
