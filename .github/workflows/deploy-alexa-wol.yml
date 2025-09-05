@@ -3,7 +3,7 @@ name: Deploy Alexa wol skill
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:  # Manual trigger
+  workflow_dispatch:  #Manual trigger
     inputs:
       environment:
         description: 'Environment to deploy'
