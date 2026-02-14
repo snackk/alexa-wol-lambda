@@ -4,11 +4,22 @@ import requests
 import uuid
 from datetime import datetime
 
-status_url = "http://snackk-media.ddns.net:80/check-emby"
-wake_url = "http://snackk-media.ddns.net:80/wake"
+BASE_URL = "http://snackk-media.ddns.net:80"
+status_url = f"{BASE_URL}/check-emby"
+wake_url = f"{BASE_URL}/send-wol/"
+climate_status_url = f"{BASE_URL}/climate/status"
+climate_set_url = f"{BASE_URL}/climate"
 
 username = os.environ.get('WOL_USERNAME')
 password = os.environ.get('WOL_PASSWORD')
+
+AC_DEVICES = {
+    'sala': 'Living Room AC',
+    'suite': 'Suite AC',
+    'escritorio': 'Office AC',
+    'cozinha': 'Kitchen AC',
+    'visitas': 'Guest Room AC'
+}
 
 def lambda_handler(event, context):
     directive = event['directive']
@@ -27,7 +38,10 @@ def lambda_handler(event, context):
     return build_error_response(directive, "INVALID_DIRECTIVE", "Directive not supported")
 
 def handle_discovery(directive):
-    device = {
+    endpoints = []
+    
+    # Existing PC device
+    endpoints.append({
         "endpointId": "snackk-alexa-wol",
         "manufacturerName": "Diogo Santos",
         "description": "snackk-media",
@@ -60,7 +74,44 @@ def handle_discovery(directive):
                 "version": "3"
             }
         ]
-    }
+    })
+
+    # AC Devices
+    for ac_id, ac_name in AC_DEVICES.items():
+        endpoints.append({
+            "endpointId": f"ac-{ac_id}",
+            "manufacturerName": "Diogo Santos",
+            "description": f"AC {ac_name}",
+            "friendlyName": ac_name,
+            "displayCategories": ["THERMOSTAT"],
+            "additionalAttributes": {
+                "manufacturer": "Diogo Santos",
+                "model": "Air Conditioner",
+                "serialNumber": f"AC-{ac_id.upper()}",
+                "firmwareVersion": "1.0",
+                "softwareVersion": "1.0",
+                "customIdentifier": f"AC {ac_id}"
+            },
+            "capabilities": [
+                {
+                    "type": "AlexaInterface",
+                    "interface": "Alexa.PowerController",
+                    "version": "3",
+                    "properties": {
+                        "supported": [
+                            {"name": "powerState"}
+                        ],
+                        "proactivelyReported": True,
+                        "retrievable": True
+                    }
+                },
+                {
+                    "type": "AlexaInterface",
+                    "interface": "Alexa",
+                    "version": "3"
+                }
+            ]
+        })
 
     response = {
         "event": {
@@ -71,7 +122,7 @@ def handle_discovery(directive):
                 "messageId": str(uuid.uuid4())
             },
             "payload": {
-                "endpoints": [device]
+                "endpoints": endpoints
             }
         }
     }
@@ -83,18 +134,38 @@ def handle_power_control(directive):
     endpoint_id = directive['endpoint']['endpointId']
     name = header['name']
 
-    if name == "TurnOn":
-        try:
-            wol_response = requests.post(wake_url, auth=(username, password), timeout=10)
-            print(f"wol response {wol_response}")
-            power_state = "ON" if wol_response.status_code == 200 else "OFF"
-        except requests.RequestException:
+    power_state = "OFF"
+    if endpoint_id == "snackk-alexa-wol":
+        if name == "TurnOn":
+            try:
+                wol_response = requests.post(wake_url, auth=(username, password), timeout=10)
+                print(f"wol response {wol_response}")
+                power_state = "ON" if wol_response.status_code == 200 else "OFF"
+            except requests.RequestException:
+                power_state = "OFF"
+        elif name == "TurnOff":
+            # Cannot actually turn off a server remotely via WoL, so just report OFF
             power_state = "OFF"
-    elif name == "TurnOff":
-        # Cannot actually turn off a server remotely via WoL, so just report OFF
-        power_state = "OFF"
+    elif endpoint_id.startswith("ac-"):
+        ac_id = endpoint_id.replace("ac-", "")
+        if ac_id in AC_DEVICES:
+            status = "ON" if name == "TurnOn" else "OFF"
+            try:
+                payload = {"roomId": ac_id, "status": status}
+                # Using session cookie might be needed if basic auth doesn't work for json post, 
+                # but based on the provided Flask code, let's try direct POST.
+                # If it needs session, we'd need to login first. 
+                # Assuming basic auth works or it's not strictly enforced for this endpoint if called from internal/trusted source.
+                # Actually, requires_auth is NOT on /climate POST in the provided Flask code.
+                response = requests.post(climate_set_url, json=payload, auth=(username, password), timeout=10)
+                if response.status_code == 200:
+                    power_state = status
+                else:
+                    power_state = "OFF" # Or keep current state if we knew it
+            except requests.RequestException:
+                power_state = "OFF"
     else:
-        return build_error_response(directive, "INVALID_DIRECTIVE", f"Unknown power directive: {name}")
+        return build_error_response(directive, "INVALID_DIRECTIVE", f"Unknown endpoint: {endpoint_id}")
 
     alexa_response = {
         "context": {
@@ -131,16 +202,24 @@ def handle_power_control(directive):
 
 def handle_report_state(directive):
     endpoint_id = directive['endpoint']['endpointId']
+    power_state = "OFF"
 
     try:
-        status_response = requests.get(status_url, auth=(username, password), timeout=10)
-        print(f"status response {status_response}")
-        if status_response.status_code == 200:
-            status_data = status_response.json()
-            is_reachable = status_data.get("reachable", False)
-            power_state = "ON" if is_reachable else "OFF"
-        else:
-            power_state = "OFF"
+        if endpoint_id == "snackk-alexa-wol":
+            status_response = requests.get(status_url, auth=(username, password), timeout=10)
+            if status_response.status_code == 200:
+                status_data = status_response.json()
+                is_reachable = status_data.get("reachable", False)
+                power_state = "ON" if is_reachable else "OFF"
+        elif endpoint_id.startswith("ac-"):
+            ac_id = endpoint_id.replace("ac-", "")
+            status_response = requests.get(climate_status_url, auth=(username, password), timeout=10)
+            if status_response.status_code == 200:
+                status_data = status_response.json()
+                # The Flask app returns: {"devices": {"sala": {"power": True, ...}, ...}, ...}
+                device_info = status_data.get("devices", {}).get(ac_id, {})
+                if device_info.get("online", False):
+                    power_state = "ON" if device_info.get("power", False) else "OFF"
     except (requests.RequestException, json.JSONDecodeError):
         power_state = "OFF"
 
