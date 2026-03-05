@@ -4,7 +4,7 @@ import requests
 import uuid
 from datetime import datetime
 
-BASE_URL = "http://snackk-media.ddns.net:80"
+BASE_URL = "https://home.snackk-media.com:443"
 status_url = f"{BASE_URL}/check-emby"
 wake_url = f"{BASE_URL}/send-wol/"
 climate_status_url = f"{BASE_URL}/climate/status"
