@@ -64,7 +64,7 @@ def handle_discovery(directive):
                     "supported": [
                         {"name": "powerState"}
                     ],
-                    "proactivelyReported": True,
+                    "proactivelyReported": False,
                     "retrievable": True
                 }
             },
@@ -101,7 +101,7 @@ def handle_discovery(directive):
                         "supported": [
                             {"name": "powerState"}
                         ],
-                        "proactivelyReported": True,
+                        "proactivelyReported": False,
                         "retrievable": True
                     }
                 },
