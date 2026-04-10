@@ -9,6 +9,7 @@ status_url = f"{BASE_URL}/check-emby"
 wake_url = f"{BASE_URL}/send-wol/"
 climate_status_url = f"{BASE_URL}/climate/status"
 climate_set_url = f"{BASE_URL}/climate"
+shutdown_url = f"{BASE_URL}/shutdown"
 
 username = os.environ.get('WOL_USERNAME')
 password = os.environ.get('WOL_PASSWORD')
@@ -144,8 +145,12 @@ def handle_power_control(directive):
             except requests.RequestException:
                 power_state = "OFF"
         elif name == "TurnOff":
-            # Cannot actually turn off a server remotely via WoL, so just report OFF
-            power_state = "OFF"
+            try:
+                shutdown_response = requests.post(shutdown_url, auth=(username, password), timeout=10)
+                print(f"shutdown response {shutdown_response}")
+                power_state = "OFF" if shutdown_response.status_code == 200 else "ON"
+            except requests.RequestException:
+                power_state = "ON"
     elif endpoint_id.startswith("ac-"):
         ac_id = endpoint_id.replace("ac-", "")
         if ac_id in AC_DEVICES:
