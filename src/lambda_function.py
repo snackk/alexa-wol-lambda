@@ -10,6 +10,8 @@ wake_url = f"{BASE_URL}/send-wol/"
 climate_status_url = f"{BASE_URL}/climate/status"
 climate_set_url = f"{BASE_URL}/climate"
 shutdown_url = f"{BASE_URL}/shutdown"
+shutter_departure_url = f"{BASE_URL}/netatmo/departure"
+shutter_wakeup_url = f"{BASE_URL}/netatmo/wakeup"
 
 username = os.environ.get('WOL_USERNAME')
 password = os.environ.get('WOL_PASSWORD')
@@ -20,6 +22,11 @@ AC_DEVICES = {
     'escritorio': 'Office AC',
     'cozinha': 'Kitchen AC',
     'visitas': 'Guest Room AC'
+}
+
+SHUTTER_SCENES = {
+    'shutter-close-all': ('Fecha Estores', shutter_departure_url),
+    'shutter-wakeup': ('Abre Estores', shutter_wakeup_url),
 }
 
 def lambda_handler(event, context):
@@ -114,6 +121,43 @@ def handle_discovery(directive):
             ]
         })
 
+    # Shutter Scene Devices
+    for scene_id, (scene_name, _) in SHUTTER_SCENES.items():
+        endpoints.append({
+            "endpointId": scene_id,
+            "manufacturerName": "Diogo Santos",
+            "description": f"Shutter {scene_name}",
+            "friendlyName": scene_name,
+            "displayCategories": ["SCENE_TRIGGER"],
+            "additionalAttributes": {
+                "manufacturer": "Diogo Santos",
+                "model": "Netatmo Shutters",
+                "serialNumber": f"SHUTTER-{scene_id.upper()}",
+                "firmwareVersion": "1.0",
+                "softwareVersion": "1.0",
+                "customIdentifier": scene_id
+            },
+            "capabilities": [
+                {
+                    "type": "AlexaInterface",
+                    "interface": "Alexa.PowerController",
+                    "version": "3",
+                    "properties": {
+                        "supported": [
+                            {"name": "powerState"}
+                        ],
+                        "proactivelyReported": False,
+                        "retrievable": False
+                    }
+                },
+                {
+                    "type": "AlexaInterface",
+                    "interface": "Alexa",
+                    "version": "3"
+                }
+            ]
+        })
+
     response = {
         "event": {
             "header": {
@@ -169,6 +213,13 @@ def handle_power_control(directive):
                     power_state = "OFF" # Or keep current state if we knew it
             except requests.RequestException:
                 power_state = "OFF"
+    elif endpoint_id in SHUTTER_SCENES:
+        _, scene_url = SHUTTER_SCENES[endpoint_id]
+        try:
+            response = requests.post(scene_url, auth=(username, password), timeout=30)
+            power_state = "ON" if response.status_code == 200 else "OFF"
+        except requests.RequestException:
+            power_state = "OFF"
     else:
         return build_error_response(directive, "INVALID_DIRECTIVE", f"Unknown endpoint: {endpoint_id}")
 
