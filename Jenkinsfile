@@ -9,7 +9,7 @@ pipeline {
 
         // Tool versions
         MAVEN_VERSION = '3.9.4'
-        TERRAFORM_VERSION = '1.6.0'
+        TERRAFORM_VERSION = '1.9.2'
         NODE_VERSION = '18'
 
         // Deployment configuration
