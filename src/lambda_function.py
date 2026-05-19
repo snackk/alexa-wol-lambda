@@ -2,6 +2,7 @@ import json
 import os
 import requests
 import uuid
+import threading
 from datetime import datetime
 
 BASE_URL = "https://home.snackk-media.com:443"
@@ -215,11 +216,16 @@ def handle_power_control(directive):
                 power_state = "OFF"
     elif endpoint_id in SHUTTER_SCENES:
         _, scene_url = SHUTTER_SCENES[endpoint_id]
-        try:
-            response = requests.post(scene_url, auth=(username, password), timeout=30)
-            power_state = "ON" if response.status_code == 200 else "OFF"
-        except requests.RequestException:
-            power_state = "OFF"
+        # Fire and forget - trigger the request in a background thread
+        # and respond to Alexa immediately to avoid timeout
+        def trigger_scene():
+            try:
+                requests.post(scene_url, auth=(username, password), timeout=60)
+            except requests.RequestException:
+                pass
+        thread = threading.Thread(target=trigger_scene)
+        thread.start()
+        power_state = "ON"
     else:
         return build_error_response(directive, "INVALID_DIRECTIVE", f"Unknown endpoint: {endpoint_id}")
 
