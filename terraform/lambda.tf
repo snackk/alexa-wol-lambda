@@ -1,3 +1,12 @@
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
 provider "aws" {
   region  = "us-east-1"
 }
@@ -50,7 +59,7 @@ resource "aws_lambda_function" "alexa_wake" {
   role            = aws_iam_role.lambda_role.arn
   handler         = "lambda_function.lambda_handler"
   runtime         = "python3.13"
-  timeout         = 10
+  timeout         = 200
 
   environment {
     variables = {
